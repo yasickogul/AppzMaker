@@ -6,6 +6,7 @@ import {
   systemSettings,
   hiringCompanies
 } from '../models/store.js';
+import { syncCompanyEmployeeCounts } from '../utils/helpers.js';
 
 export const getProfile = (req, res) => {
   const emp = employees.find(e => e.id === req.params.id);
@@ -180,12 +181,6 @@ export const createLeaveRequest = (req, res) => {
 
   leaveRequests.push(newLeave);
 
-  // Update used balance locally
-  const balance = leaveBalances.find(b => b.employeeId === emp.id);
-  if (balance && balance[type]) {
-    balance[type].used += Number(days);
-  }
-
   res.json({ message: 'Leave request submitted successfully', leave: newLeave });
 };
 
@@ -203,5 +198,6 @@ export const updateClient = (req, res) => {
     emp.companyId = comp.id;
     emp.company = comp.name;
   }
+  syncCompanyEmployeeCounts(hiringCompanies, employees);
   res.json({ message: 'Employee client updated successfully', employee: emp });
 };

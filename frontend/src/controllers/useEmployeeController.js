@@ -41,7 +41,7 @@ export function useEmployeeController(userId) {
   });
 
   // Attendance history selection state
-  const [selectedMonth, setSelectedMonth] = useState('2026-06');
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7));
 
   // Load all user profile, leave, and attendance data from backend
   const fetchData = async () => {

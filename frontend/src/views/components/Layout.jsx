@@ -25,7 +25,7 @@ const navByRole = {
   superadmin: [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'users', label: 'User Management', icon: Users },
-    { id: 'salary', label: 'Salary Management', icon: DollarSign },
+    
     { id: 'reports', label: 'System Reports', icon: FileText },
     { id: 'companies', label: 'Clients', icon: Building2 },
     { id: 'settings', label: 'Settings', icon: Settings },

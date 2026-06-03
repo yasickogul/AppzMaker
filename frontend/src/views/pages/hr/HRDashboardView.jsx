@@ -1,6 +1,5 @@
 import { Users, CheckCircle2, XCircle, Clock, AlertTriangle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
-import { weeklyAttendanceData } from '../../../models/mockData';
 
 const deptColors = {
   Engineering: '#4338ca',
@@ -12,35 +11,17 @@ const deptColors = {
 
 export function HRDashboardView({
   employeesList,
-  presentToday,
-  onLeaveToday,
+  todayAttendance,
+  weeklyAttendanceData,
+  deptData,
+  todayLabel,
   leaveCounts,
   leavesList,
-  getEmployeeStats,
 }) {
-  const todayDate = '2026-05-31';
-  // Attendance calculations for dashboard
-  const todayAttendance = employeesList.map(e => {
-    return {
-      employeeId: e.id,
-      date: todayDate,
-      status: e.id === 'emp001' ? 'present' : e.id === 'emp002' ? 'present' : e.id === 'emp003' ? 'late' : e.id === 'emp005' ? 'present' : e.id === 'emp006' ? 'present' : e.id === 'emp007' ? 'late' : 'absent',
-      checkIn: e.id === 'emp001' ? '09:02' : e.id === 'emp002' ? '08:45' : e.id === 'emp003' ? '09:15' : e.id === 'emp005' ? '08:58' : e.id === 'emp006' ? '09:00' : e.id === 'emp007' ? '09:20' : null,
-      checkOut: null
-    };
-  });
-
-  const present = todayAttendance.filter(a => a.status === 'present' || a.status === 'late').length;
-  const absent = todayAttendance.filter(a => a.status === 'absent').length;
-  const late = todayAttendance.filter(a => a.status === 'late').length;
-  const pendingLeaves = leavesList.filter(l => l.status === 'pending');
-
-  const depts = [...new Set(employeesList.map(e => e.department))];
-  const deptData = depts.map(d => {
-    const deptEmps = employeesList.filter(e => e.department === d);
-    const deptPresent = deptEmps.filter(e => todayAttendance.find(a => a.employeeId === e.id && (a.status === 'present' || a.status === 'late'))).length;
-    return { name: d, total: deptEmps.length, present: deptPresent };
-  });
+  const present = todayAttendance.filter((a) => a.status === 'present' || a.status === 'late').length;
+  const absent = todayAttendance.filter((a) => a.status === 'absent').length;
+  const late = todayAttendance.filter((a) => a.status === 'late').length;
+  const pendingLeaves = leavesList.filter((l) => l.status === 'pending');
 
   const pieData = [
     { name: 'Present', value: present, color: '#10b981' },
@@ -52,17 +33,16 @@ export function HRDashboardView({
     <div className="space-y-6" style={{ fontFamily: 'DM Sans, sans-serif' }}>
       <div>
         <h1 className="text-slate-800" style={{ fontWeight: 700, fontSize: '1.375rem' }}>HR Dashboard</h1>
-        <p className="text-slate-500 text-sm mt-0.5">Workforce overview for today, Sunday May 31, 2026</p>
+        <p className="text-slate-500 text-sm mt-0.5">Workforce overview for today, {todayLabel || 'today'}</p>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Total Employees', value: employeesList.filter(e => e.status === 'active').length, icon: Users, color: 'text-indigo-600', bg: 'bg-indigo-50', sub: `${employeesList.length} total incl. inactive` },
-          { label: 'Present Today', value: present, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50', sub: `${Math.round((present / employeesList.length) * 100)}% of workforce` },
-          { label: 'Absent Today', value: absent, icon: XCircle, color: 'text-red-500', bg: 'bg-red-50', sub: `${employeesList.length - present - absent} unrecorded` },
+          { label: 'Total Employees', value: employeesList.filter((e) => e.status === 'active').length, icon: Users, color: 'text-indigo-600', bg: 'bg-indigo-50', sub: `${employeesList.length} total incl. inactive` },
+          { label: 'Present Today', value: present, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50', sub: `${employeesList.length > 0 ? Math.round((present / employeesList.length) * 100) : 0}% of workforce` },
+          { label: 'Absent Today', value: absent, icon: XCircle, color: 'text-red-500', bg: 'bg-red-50', sub: `${late} late arrivals` },
           { label: 'Pending Approvals', value: leaveCounts.pending, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50', sub: 'Leave requests pending' },
-        ].map(s => {
+        ].map((s) => {
           const Icon = s.icon;
           return (
             <div key={s.label} className="bg-white rounded-2xl border border-border p-5">
@@ -78,7 +58,6 @@ export function HRDashboardView({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Weekly attendance chart */}
         <div className="lg:col-span-2 bg-white rounded-2xl border border-border p-6">
           <h3 className="text-slate-800 font-semibold mb-4">Weekly Attendance Overview</h3>
           <ResponsiveContainer width="100%" height={200}>
@@ -95,7 +74,6 @@ export function HRDashboardView({
           </ResponsiveContainer>
         </div>
 
-        {/* Today's breakdown pie */}
         <div className="bg-white rounded-2xl border border-border p-6">
           <h3 className="text-slate-800 font-semibold mb-4">Today's Breakdown</h3>
           <ResponsiveContainer width="100%" height={160}>
@@ -107,7 +85,7 @@ export function HRDashboardView({
             </PieChart>
           </ResponsiveContainer>
           <div className="space-y-2 mt-2">
-            {pieData.map(p => (
+            {pieData.map((p) => (
               <div key={p.name} className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full" style={{ background: p.color }} />
@@ -121,14 +99,13 @@ export function HRDashboardView({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Pending leave approvals */}
         <div className="bg-white rounded-2xl border border-border p-6">
           <h3 className="text-slate-800 font-semibold mb-4 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-500" />
             Pending Leave Requests ({pendingLeaves.length})
           </h3>
           <div className="space-y-3">
-            {pendingLeaves.map(leave => (
+            {pendingLeaves.map((leave) => (
               <div key={leave.id} className="flex items-start justify-between gap-3 p-3 rounded-xl bg-amber-50/50 border border-amber-100">
                 <div>
                   <div className="text-slate-700 font-medium text-sm">{leave.employeeName}</div>
@@ -143,11 +120,10 @@ export function HRDashboardView({
           </div>
         </div>
 
-        {/* Department attendance */}
         <div className="bg-white rounded-2xl border border-border p-6">
           <h3 className="text-slate-800 font-semibold mb-4">Attendance by Department</h3>
           <div className="space-y-4">
-            {deptData.map(d => (
+            {deptData.map((d) => (
               <div key={d.name}>
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-slate-600 text-sm">{d.name}</span>
@@ -165,21 +141,20 @@ export function HRDashboardView({
         </div>
       </div>
 
-      {/* Today's attendance table */}
       <div className="bg-white rounded-2xl border border-border p-6">
         <h3 className="text-slate-800 font-semibold mb-4">Today's Attendance Record</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
-                {['Employee', 'Department', 'Check In', 'Check Out', 'Status'].map(h => (
+                {['Employee', 'Department', 'Check In', 'Check Out', 'Status'].map((h) => (
                   <th key={h} className="text-left text-slate-400 font-medium pb-3 pr-4">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {employeesList.filter(e => e.status === 'active').map(emp => {
-                const rec = todayAttendance.find(a => a.employeeId === emp.id);
+              {employeesList.filter((e) => e.status === 'active').map((emp) => {
+                const rec = todayAttendance.find((a) => a.employeeId === emp.id);
                 const status = rec?.status || 'absent';
                 const statusCls = {
                   present: 'bg-emerald-50 text-emerald-700',

@@ -31,7 +31,6 @@ export function AdminSalaryView({
     <div className="space-y-6" style={{ fontFamily: 'DM Sans, sans-serif' }}>
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-slate-800" style={{ fontWeight: 700, fontSize: '1.375rem' }}>Salary Management</h1>
           <p className="text-slate-500 text-sm mt-0.5">Manage employee payroll and salary structures</p>
         </div>
         <div className="flex items-center gap-3">

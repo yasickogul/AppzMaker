@@ -1,18 +1,11 @@
 import { Users, CheckCircle2, Clock, TrendingUp } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-const weekData = [
-  { day: 'Mon', present: 12, absent: 2 },
-  { day: 'Tue', present: 13, absent: 1 },
-  { day: 'Wed', present: 11, absent: 3 },
-  { day: 'Thu', present: 12, absent: 2 },
-  { day: 'Fri', present: 10, absent: 4 },
-];
-
 export function CompanyDashboardView({
   company,
   myEmployees,
   todayRecs,
+  weeklyData,
   presentCount,
   absentCount,
   pendingLeaves,
@@ -52,7 +45,7 @@ export function CompanyDashboardView({
         <div className="bg-white rounded-2xl border border-border p-6">
           <h3 className="text-slate-800 font-semibold mb-4">Weekly Attendance</h3>
           <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={weekData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+            <BarChart data={weeklyData || []} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
               <XAxis dataKey="day" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />

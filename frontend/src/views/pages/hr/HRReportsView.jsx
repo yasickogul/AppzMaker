@@ -1,20 +1,5 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts';
 import { Download, BarChart3, Users, Calendar } from 'lucide-react';
-import { weeklyAttendanceData } from '../../../models/mockData';
-
-const leaveTypeData = [
-  { name: 'Annual', value: 12, color: '#4338ca' },
-  { name: 'Casual', value: 8, color: '#0ea5e9' },
-  { name: 'Personal', value: 18, color: '#ef4444' },
-];
-
-const monthlyTrend = [
-  { month: 'Jan', attendance: 91, leaves: 18 },
-  { month: 'Feb', attendance: 88, leaves: 22 },
-  { month: 'Mar', attendance: 93, leaves: 14 },
-  { month: 'Apr', attendance: 89, leaves: 19 },
-  { month: 'May', attendance: 85, leaves: 26 },
-];
 
 export function HRReportsView({
   reportType,
@@ -22,21 +7,13 @@ export function HRReportsView({
   employeesList,
   leavesList,
   getEmployeeStats,
+  weeklyAttendanceData,
+  leaveTypeData,
+  monthlyTrend,
+  reportsSummary,
+  todayAttendance,
 }) {
-  // Attendance calculations for dashboard
-  const todayDate = '2026-05-31';
-  const todayAttendance = employeesList.map(e => {
-    return {
-      employeeId: e.id,
-      date: todayDate,
-      status: e.id === 'emp001' ? 'present' : e.id === 'emp002' ? 'present' : e.id === 'emp003' ? 'late' : e.id === 'emp005' ? 'present' : e.id === 'emp006' ? 'present' : e.id === 'emp007' ? 'late' : 'absent',
-      checkIn: e.id === 'emp001' ? '09:02' : e.id === 'emp002' ? '08:45' : e.id === 'emp003' ? '09:15' : e.id === 'emp005' ? '08:58' : e.id === 'emp006' ? '09:00' : e.id === 'emp007' ? '09:20' : null,
-      checkOut: null,
-      totalHours: e.id === 'emp001' ? 8.1 : e.id === 'emp002' ? 7.8 : e.id === 'emp003' ? 8.0 : e.id === 'emp005' ? 7.9 : e.id === 'emp006' ? 8.2 : e.id === 'emp007' ? 8.0 : 0
-    };
-  });
-
-  const totalHours = todayAttendance.reduce((s, r) => s + r.totalHours, 0);
+  const totalHours = todayAttendance.reduce((s, r) => s + (r.totalHours || 0), 0);
 
   return (
     <div className="space-y-6" style={{ fontFamily: 'DM Sans, sans-serif' }}>
@@ -55,7 +32,6 @@ export function HRReportsView({
         </div>
       </div>
 
-      {/* Report type selector */}
       <div className="bg-white rounded-2xl border border-border p-4">
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1">
@@ -77,14 +53,13 @@ export function HRReportsView({
         </div>
       </div>
 
-      {/* Summary stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Total Employees', value: employeesList.length, sub: `${employeesList.filter(e => e.status === 'active').length} active` },
-          { label: 'Avg Attendance', value: '88%', sub: 'This period' },
-          { label: 'Total Hours', value: `${totalHours.toFixed(0)}h`, sub: 'All employees' },
-          { label: 'Leave Days Used', value: leavesList.filter(l => l.status === 'approved').reduce((s, l) => s + l.days, 0), sub: 'Approved leaves' },
-        ].map(s => (
+          { label: 'Total Employees', value: reportsSummary.totalEmployees || employeesList.length, sub: `${reportsSummary.activeEmployees || employeesList.filter((e) => e.status === 'active').length} active` },
+          { label: 'Avg Attendance', value: `${reportsSummary.avgAttendance || 0}%`, sub: 'This period' },
+          { label: 'Total Hours', value: `${(reportsSummary.totalHours || totalHours).toFixed(0)}h`, sub: 'All employees' },
+          { label: 'Leave Days Used', value: reportsSummary.leaveDaysUsed || leavesList.filter((l) => l.status === 'approved').reduce((s, l) => s + l.days, 0), sub: 'Approved leaves' },
+        ].map((s) => (
           <div key={s.label} className="bg-white rounded-2xl border border-border p-5">
             <div className="text-slate-800 mb-0.5" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: '1.5rem' }}>{s.value}</div>
             <div className="text-slate-700 text-sm font-medium">{s.label}</div>
@@ -104,9 +79,9 @@ export function HRReportsView({
                 <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12 }} />
                 <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-                <Bar dataKey="present" name="Present" fill="#10b981" radius={[3,3,0,0]} />
-                <Bar dataKey="absent" name="Absent" fill="#ef4444" radius={[3,3,0,0]} />
-                <Bar dataKey="late" name="Late" fill="#f59e0b" radius={[3,3,0,0]} />
+                <Bar dataKey="present" name="Present" fill="#10b981" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="absent" name="Absent" fill="#ef4444" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="late" name="Late" fill="#f59e0b" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -124,20 +99,19 @@ export function HRReportsView({
             </ResponsiveContainer>
           </div>
 
-          {/* Attendance detail table */}
           <div className="lg:col-span-2 bg-white rounded-2xl border border-border p-6">
             <h3 className="text-slate-800 font-semibold mb-4">Employee Attendance Report</h3>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    {['Employee', 'Department', 'Present', 'Absent', 'Late', 'Total Hours', 'Att. Rate'].map(h => (
+                    {['Employee', 'Department', 'Present', 'Absent', 'Late', 'Total Hours', 'Att. Rate'].map((h) => (
                       <th key={h} className="text-left text-slate-400 font-medium pb-3 pr-4 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {employeesList.map(emp => {
+                  {employeesList.map((emp) => {
                     const stats = getEmployeeStats(emp.id);
                     return (
                       <tr key={emp.id} className="hover:bg-slate-50/50">
@@ -149,8 +123,8 @@ export function HRReportsView({
                         </td>
                         <td className="py-3 pr-4 text-slate-500">{emp.department}</td>
                         <td className="py-3 pr-4 text-emerald-600 font-medium" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{stats.present}</td>
-                        <td className="py-3 pr-4 text-red-500 font-medium" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{stats.total - stats.present}</td>
-                        <td className="py-3 pr-4 text-amber-600 font-medium" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{Math.floor(stats.present * 0.1)}</td>
+                        <td className="py-3 pr-4 text-red-500 font-medium" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{stats.absent ?? stats.total - stats.present}</td>
+                        <td className="py-3 pr-4 text-amber-600 font-medium" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{stats.late || 0}</td>
                         <td className="py-3 pr-4 text-slate-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{stats.hours.toFixed(1)}h</td>
                         <td className="py-3">
                           <div className="flex items-center gap-2">
@@ -183,7 +157,7 @@ export function HRReportsView({
               </PieChart>
             </ResponsiveContainer>
             <div className="flex flex-wrap gap-3 mt-2 justify-center">
-              {leaveTypeData.map(d => (
+              {leaveTypeData.map((d) => (
                 <div key={d.name} className="flex items-center gap-1.5 text-xs text-slate-500">
                   <div className="w-2.5 h-2.5 rounded-full" style={{ background: d.color }} />
                   {d.name} ({d.value})
@@ -197,11 +171,11 @@ export function HRReportsView({
             <div className="space-y-4">
               {[
                 { label: 'Total Requests', value: leavesList.length, color: 'text-slate-700' },
-                { label: 'Approved', value: leavesList.filter(l => l.status === 'approved').length, color: 'text-emerald-600' },
-                { label: 'Rejected', value: leavesList.filter(l => l.status === 'rejected').length, color: 'text-red-500' },
-                { label: 'Pending', value: leavesList.filter(l => l.status === 'pending').length, color: 'text-amber-600' },
-                { label: 'Total Days Off', value: leavesList.filter(l => l.status === 'approved').reduce((s, l) => s + l.days, 0), color: 'text-indigo-600' },
-              ].map(s => (
+                { label: 'Approved', value: leavesList.filter((l) => l.status === 'approved').length, color: 'text-emerald-600' },
+                { label: 'Rejected', value: leavesList.filter((l) => l.status === 'rejected').length, color: 'text-red-500' },
+                { label: 'Pending', value: leavesList.filter((l) => l.status === 'pending').length, color: 'text-amber-600' },
+                { label: 'Total Days Off', value: leavesList.filter((l) => l.status === 'approved').reduce((s, l) => s + l.days, 0), color: 'text-indigo-600' },
+              ].map((s) => (
                 <div key={s.label} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                   <span className="text-slate-500 text-sm">{s.label}</span>
                   <span className={`font-semibold ${s.color}`} style={{ fontFamily: 'JetBrains Mono, monospace' }}>{s.value}</span>
@@ -216,13 +190,13 @@ export function HRReportsView({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    {['Employee', 'Dept', 'Type', 'From', 'To', 'Days', 'Status', 'Applied'].map(h => (
+                    {['Employee', 'Dept', 'Type', 'From', 'To', 'Days', 'Status', 'Applied'].map((h) => (
                       <th key={h} className="text-left text-slate-400 font-medium pb-3 pr-3 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {leavesList.map(l => {
+                  {leavesList.map((l) => {
                     const sc = { approved: 'bg-emerald-50 text-emerald-700', rejected: 'bg-red-50 text-red-600', pending: 'bg-amber-50 text-amber-600' };
                     return (
                       <tr key={l.id} className="hover:bg-slate-50/50">
@@ -253,13 +227,13 @@ export function HRReportsView({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border">
-                  {['Employee', 'Company', 'Department', 'Position', 'Join Date', 'Status'].map(h => (
+                  {['Employee', 'Company', 'Department', 'Position', 'Join Date', 'Status'].map((h) => (
                     <th key={h} className="text-left text-slate-400 font-medium pb-3 pr-4 whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {employeesList.map(emp => (
+                {employeesList.map((emp) => (
                   <tr key={emp.id} className="hover:bg-slate-50/50">
                     <td className="py-3 pr-4">
                       <div className="flex items-center gap-2">
