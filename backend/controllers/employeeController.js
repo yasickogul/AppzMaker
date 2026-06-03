@@ -1,203 +1,184 @@
-import { 
-  employees, 
-  attendanceRecords, 
-  leaveRequests, 
-  leaveBalances,
-  systemSettings,
-  hiringCompanies
-} from '../models/store.js';
-import { syncCompanyEmployeeCounts } from '../utils/helpers.js';
+import LeaveBalance from '../models/LeaveBalance.js';
+import LeaveRequest from '../models/LeaveRequest.js';
+import Attendance from '../models/Attendance.js';
+import Company from '../models/Company.js';
+import { findEmployee, getEmployeeLegacyId } from '../utils/entityLookup.js';
+import { toEmployeeJSON, toAttendanceJSON, toLeaveJSON, toLeaveBalanceJSON } from '../utils/formatters.js';
+import { getSettings } from '../services/settingsService.js';
+import { syncCompanyEmployeeCounts } from '../services/companyService.js';
+import { getSecsFromTime, finalizeClockOut } from '../utils/attendanceMath.js';
 
-export const getProfile = (req, res) => {
-  const emp = employees.find(e => e.id === req.params.id);
-  if (!emp) return res.status(404).json({ error: 'Employee not found' });
-  
-  const balance = leaveBalances.find(b => b.employeeId === emp.id) || {
-    annual: { total: parseInt(systemSettings.leaveAllocations.annual) || 15, used: 0 },
-    casual: { total: parseInt(systemSettings.leaveAllocations.casual) || 10, used: 0 },
-    personal: { total: parseInt(systemSettings.leaveAllocations.personal) || 10, used: 0 }
-  };
+export const getProfile = async (req, res) => {
+  try {
+    const emp = await findEmployee(req.params.id);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
 
-  res.json({ employee: emp, leaveBalance: balance, settings: systemSettings });
-};
+    const empId = getEmployeeLegacyId(emp);
+    let balance = await LeaveBalance.findOne({ employeeId: empId });
+    const settings = await getSettings();
 
-export const getAttendance = (req, res) => {
-  const records = attendanceRecords.filter(r => r.employeeId === req.params.id);
-  res.json(records);
-};
-
-export const logAttendance = (req, res) => {
-  const { action, time, date } = req.body;
-  const empId = req.params.id;
-
-  let todayRecord = attendanceRecords.find(r => r.employeeId === empId && r.date === date);
-
-  const getSecsFromTime = (tStr) => {
-    if (!tStr) return 0;
-    const parts = tStr.split(':').map(Number);
-    const h = parts[0] || 0;
-    const m = parts[1] || 0;
-    const s = parts[2] || 0;
-    return h * 3600 + m * 60 + s;
-  };
-
-  if (action === 'clock-in') {
-    if (todayRecord) return res.status(400).json({ error: 'Already clocked in today' });
-    
-    todayRecord = {
-      id: `att${String(attendanceRecords.length + 1).padStart(3, '0')}`,
-      employeeId: empId,
-      date,
-      checkIn: time,
-      checkOut: null,
-      status: 'present',
-      totalHours: 0,
-      breakMinutes: 0,
-      onBreak: false,
-      breaks: [],
-      overtime: 0
-    };
-    attendanceRecords.push(todayRecord);
-  } else if (action === 'start-break') {
-    if (!todayRecord) return res.status(400).json({ error: 'Not clocked in today' });
-    todayRecord.onBreak = true;
-    if (!todayRecord.breaks) todayRecord.breaks = [];
-    todayRecord.breaks.push({ start: time, end: null });
-  } else if (action === 'end-break') {
-    if (!todayRecord) return res.status(400).json({ error: 'Not clocked in today' });
-    todayRecord.onBreak = false;
-    if (!todayRecord.breaks) todayRecord.breaks = [];
-    const activeBreak = todayRecord.breaks.find(b => !b.end);
-    if (activeBreak) {
-      activeBreak.end = time;
-    }
-    
-    // Recalculate breakMinutes
-    let totalBreakSecs = 0;
-    todayRecord.breaks.forEach(b => {
-      if (b.start && b.end) {
-        totalBreakSecs += (getSecsFromTime(b.end) - getSecsFromTime(b.start));
-      }
-    });
-    todayRecord.breakMinutes = Math.round(totalBreakSecs / 60);
-  } else if (action === 'clock-out') {
-    if (!todayRecord) return res.status(400).json({ error: 'Not clocked in today' });
-    
-    todayRecord.checkOut = time;
-    if (todayRecord.onBreak) {
-      todayRecord.onBreak = false;
-      const activeBreak = todayRecord.breaks.find(b => !b.end);
-      if (activeBreak) {
-        activeBreak.end = time;
-      }
-    }
-
-    // Recalculate breakMinutes
-    let totalBreakSecs = 0;
-    if (todayRecord.breaks) {
-      todayRecord.breaks.forEach(b => {
-        if (b.start && b.end) {
-          totalBreakSecs += (getSecsFromTime(b.end) - getSecsFromTime(b.start));
-        }
+    if (!balance) {
+      balance = await LeaveBalance.create({
+        employeeId: empId,
+        annual: { total: settings.leaveAllocations?.annual || 15, used: 0 },
+        casual: { total: settings.leaveAllocations?.casual || 10, used: 0 },
+        personal: { total: settings.leaveAllocations?.personal || 10, used: 0 },
       });
     }
-    
-    const actualBreakMin = Math.round(totalBreakSecs / 60);
-    todayRecord.breakMinutes = actualBreakMin;
 
-    const inSecs = getSecsFromTime(todayRecord.checkIn);
-    const outSecs = getSecsFromTime(time);
-    
-    // Parse allowed break minutes
-    let allowedBreakMin = 60;
-    if (systemSettings.breakTime) {
-      const match = systemSettings.breakTime.match(/(\d+)\s*(hour|minute|min)/i);
-      if (match) {
-        const val = parseInt(match[1]);
-        const unit = match[2].toLowerCase();
-        allowedBreakMin = unit.startsWith('hour') ? val * 60 : val;
+    res.json({
+      employee: toEmployeeJSON(emp),
+      leaveBalance: toLeaveBalanceJSON(balance),
+      settings,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const getAttendance = async (req, res) => {
+  try {
+    const emp = await findEmployee(req.params.id);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+
+    const records = await Attendance.find({ employeeId: getEmployeeLegacyId(emp) }).sort({ date: -1 });
+    res.json(records.map(toAttendanceJSON));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const logAttendance = async (req, res) => {
+  try {
+    const { action, time, date } = req.body;
+    const emp = await findEmployee(req.params.id);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+
+    const empId = getEmployeeLegacyId(emp);
+    const settings = await getSettings();
+
+    let todayRecord = await Attendance.findOne({ employeeId: empId, date });
+
+    if (action === 'clock-in') {
+      if (todayRecord) return res.status(400).json({ error: 'Already clocked in today' });
+
+      todayRecord = await Attendance.create({
+        employeeId: empId,
+        date,
+        checkIn: time,
+        checkOut: null,
+        status: 'present',
+        totalHours: 0,
+        breakMinutes: 0,
+        onBreak: false,
+        breaks: [],
+        extraHours: 0,
+        lessHours: 0,
+      });
+    } else if (action === 'start-break') {
+      if (!todayRecord) return res.status(400).json({ error: 'Not clocked in today' });
+      todayRecord.onBreak = true;
+      if (!todayRecord.breaks) todayRecord.breaks = [];
+      todayRecord.breaks.push({ start: time, end: null });
+      await todayRecord.save();
+    } else if (action === 'end-break') {
+      if (!todayRecord) return res.status(400).json({ error: 'Not clocked in today' });
+      todayRecord.onBreak = false;
+      if (!todayRecord.breaks) todayRecord.breaks = [];
+      const activeBreak = todayRecord.breaks.find((b) => !b.end);
+      if (activeBreak) activeBreak.end = time;
+
+      let totalBreakSecs = 0;
+      todayRecord.breaks.forEach((b) => {
+        if (b.start && b.end) {
+          totalBreakSecs += getSecsFromTime(b.end) - getSecsFromTime(b.start);
+        }
+      });
+      todayRecord.breakMinutes = Math.round(totalBreakSecs / 60);
+      await todayRecord.save();
+    } else if (action === 'clock-out') {
+      if (!todayRecord) return res.status(400).json({ error: 'Not clocked in today' });
+
+      if (todayRecord.onBreak) {
+        todayRecord.onBreak = false;
+        const activeBreak = todayRecord.breaks?.find((b) => !b.end);
+        if (activeBreak) activeBreak.end = time;
       }
+
+      finalizeClockOut(todayRecord, time, settings);
+      await todayRecord.save();
     }
 
-    // Parse standard work hours
-    let stdHours = 8;
-    if (systemSettings.workHours) {
-      const match = systemSettings.workHours.match(/(\d+)/);
-      if (match) {
-        stdHours = parseInt(match[1]);
-      }
-    }
+    res.json({ message: `Successfully executed ${action}`, record: toAttendanceJSON(todayRecord) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 
-    // Elapsed hours
-    let elapsedHrs = (outSecs - inSecs) / 3600;
+export const getLeaves = async (req, res) => {
+  try {
+    const emp = await findEmployee(req.params.id);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
 
-    // Actual worked hours = elapsed hours - actual break hours
-    let totalHr = elapsedHrs - (totalBreakSecs / 3600);
-    totalHr = Math.max(0, Math.round(totalHr * 100) / 100);
-    todayRecord.totalHours = totalHr;
+    const leaves = await LeaveRequest.find({ employeeId: getEmployeeLegacyId(emp) }).sort({ createdAt: -1 });
+    res.json(leaves.map(toLeaveJSON));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 
-    // Increase target hours if actual break is over limit
-    let targetHours = stdHours;
-    if (actualBreakMin > allowedBreakMin) {
-      const extraBreakHrs = (actualBreakMin - allowedBreakMin) / 60;
-      targetHours += extraBreakHrs;
-    }
+export const createLeaveRequest = async (req, res) => {
+  try {
+    const emp = await findEmployee(req.params.id);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
 
-    if (totalHr > targetHours) {
-      todayRecord.extraHours = Math.round((totalHr - targetHours) * 100) / 100;
-      todayRecord.lessHours = 0;
+    const { type, startDate, endDate, days, reason } = req.body;
+    const empId = getEmployeeLegacyId(emp);
+
+    const newLeave = await LeaveRequest.create({
+      employeeId: empId,
+      employeeName: emp.name,
+      department: emp.department,
+      type,
+      startDate,
+      endDate,
+      days: Number(days),
+      reason,
+      status: 'pending',
+      appliedOn: new Date().toISOString().split('T')[0],
+    });
+
+    res.status(201).json({
+      message: 'Leave request submitted successfully',
+      leave: toLeaveJSON(newLeave),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const updateClient = async (req, res) => {
+  try {
+    const emp = await findEmployee(req.params.id);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+
+    const { clientId } = req.body;
+    if (!clientId || clientId === 'unassigned' || clientId === 'Unassigned' || clientId === 'Our Company') {
+      emp.companyId = null;
+      emp.company = 'Our Company';
     } else {
-      todayRecord.extraHours = 0;
-      todayRecord.lessHours = Math.round((targetHours - totalHr) * 100) / 100;
+      const comp = await Company.findOne({
+        $or: [{ legacyId: clientId }, { _id: clientId }],
+      });
+      if (!comp) return res.status(404).json({ error: 'Client not found' });
+      emp.companyId = comp.legacyId || comp._id.toString();
+      emp.company = comp.name;
     }
+    await emp.save();
+    await syncCompanyEmployeeCounts();
+
+    res.json({ message: 'Employee client updated successfully', employee: toEmployeeJSON(emp) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
-
-  res.json({ message: `Successfully executed ${action}`, record: todayRecord });
-};
-
-export const getLeaves = (req, res) => {
-  const leaves = leaveRequests.filter(l => l.employeeId === req.params.id);
-  res.json(leaves);
-};
-
-export const createLeaveRequest = (req, res) => {
-  const emp = employees.find(e => e.id === req.params.id);
-  if (!emp) return res.status(404).json({ error: 'Employee not found' });
-
-  const { type, startDate, endDate, days, reason } = req.body;
-  const newLeave = {
-    id: `lv${String(leaveRequests.length + 1).padStart(3, '0')}`,
-    employeeId: emp.id,
-    employeeName: emp.name,
-    department: emp.department,
-    type,
-    startDate,
-    endDate,
-    days: Number(days),
-    reason,
-    status: 'pending',
-    appliedOn: new Date().toISOString().split('T')[0]
-  };
-
-  leaveRequests.push(newLeave);
-
-  res.json({ message: 'Leave request submitted successfully', leave: newLeave });
-};
-
-export const updateClient = (req, res) => {
-  const emp = employees.find(e => e.id === req.params.id);
-  if (!emp) return res.status(404).json({ error: 'Employee not found' });
-
-  const { clientId } = req.body;
-  if (!clientId || clientId === 'unassigned' || clientId === 'Unassigned' || clientId === 'Our Company') {
-    emp.companyId = null;
-    emp.company = 'Our Company';
-  } else {
-    const comp = hiringCompanies.find(c => c.id === clientId);
-    if (!comp) return res.status(404).json({ error: 'Client not found' });
-    emp.companyId = comp.id;
-    emp.company = comp.name;
-  }
-  syncCompanyEmployeeCounts(hiringCompanies, employees);
-  res.json({ message: 'Employee client updated successfully', employee: emp });
 };

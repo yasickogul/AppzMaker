@@ -24,7 +24,7 @@ const userSchema = new mongoose.Schema(
       enum: ['employee', 'hr', 'company', 'superadmin'],
       required: true,
     },
-    /** Links to store.js entity: emp001, hr001, co001, etc. */
+    /** Links to workforce profile: emp001, hr001, co001, etc. */
     profileId: {
       type: String,
       default: null,

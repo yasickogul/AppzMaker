@@ -6,6 +6,8 @@ import swaggerUi from 'swagger-ui-express';
 import apiRouter from './routes/api.js';
 import authRoutes from './routes/authRoutes.js';
 import { connectDatabase } from './config/db.js';
+import { seedIfEmpty } from './scripts/seedDatabase.js';
+import { ensureUserProfiles } from './scripts/ensureUserProfiles.js';
 
 dotenv.config();
 
@@ -20,7 +22,7 @@ app.get('/api/health', (req, res) => {
     status: 'healthy',
     message: 'WorkForge Backend Service is running!',
     database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-    dataSource: 'MongoDB (auth) + in-memory store (workforce)',
+    dataSource: 'MongoDB Atlas',
     swagger: `http://localhost:${PORT}/api-docs`,
     timestamp: new Date(),
   });
@@ -45,6 +47,8 @@ try {
 const startServer = async () => {
   try {
     await connectDatabase();
+    await seedIfEmpty();
+    await ensureUserProfiles();
 
     const server = app.listen(PORT, () => {
       console.log(`🚀 WorkForge Server running on port ${PORT}`);
@@ -61,7 +65,7 @@ const startServer = async () => {
       process.exit(1);
     });
   } catch (error) {
-    console.error('❌ Failed to connect to MongoDB:', error.message);
+    console.error('❌ Failed to start server:', error.message);
     process.exit(1);
   }
 };

@@ -1,11 +1,13 @@
-import { employees, hrUsers, hiringCompanies } from '../models/store.js';
+import Employee from '../models/Employee.js';
+import HRUser from '../models/HRUser.js';
+import Company from '../models/Company.js';
 
-const normalizeRole = (role) => {
+export const normalizeRole = (role) => {
   if (role === 'admin') return 'superadmin';
   return role;
 };
 
-export const resolveProfileId = (user) => {
+export const resolveProfileId = async (user) => {
   const role = normalizeRole(user.role);
 
   if (user.profileId) {
@@ -13,29 +15,28 @@ export const resolveProfileId = (user) => {
   }
 
   const email = user.email?.toLowerCase();
+  if (!email) return null;
 
   if (role === 'employee') {
-    const emp = employees.find((e) => e.email?.toLowerCase() === email);
-    if (emp) return emp.id;
+    let emp = await Employee.findOne({ email });
+    if (emp) return emp.legacyId || emp._id.toString();
     const firstName = user.name?.split(' ')[0]?.toLowerCase();
     if (firstName) {
-      const byName = employees.find((e) => e.name?.toLowerCase().startsWith(firstName));
-      if (byName) return byName.id;
+      emp = await Employee.findOne({ name: new RegExp(`^${firstName}`, 'i') });
+      if (emp) return emp.legacyId || emp._id.toString();
     }
     return null;
   }
 
   if (role === 'hr') {
-    const hr = hrUsers.find((h) => h.email?.toLowerCase() === email);
-    return hr?.id || null;
+    const hr = await HRUser.findOne({ email });
+    return hr ? hr.legacyId || hr._id.toString() : null;
   }
 
   if (role === 'company') {
-    const co = hiringCompanies.find((c) => c.email?.toLowerCase() === email);
-    return co?.id || null;
+    const co = await Company.findOne({ email });
+    return co ? co.legacyId || co._id.toString() : null;
   }
 
   return null;
 };
-
-export { normalizeRole };

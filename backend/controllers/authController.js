@@ -1,7 +1,13 @@
 import User from '../models/User.js';
+import Employee from '../models/Employee.js';
+import HRUser from '../models/HRUser.js';
+import Company from '../models/Company.js';
+import LeaveBalance from '../models/LeaveBalance.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { resolveProfileId, normalizeRole } from '../utils/resolveProfile.js';
+import { getSettings } from '../services/settingsService.js';
+import { getEmployeeLegacyId } from '../utils/entityLookup.js';
 
 const VALID_ROLES = ['employee', 'hr', 'company', 'superadmin'];
 
@@ -12,9 +18,9 @@ const signToken = (user) =>
     { expiresIn: '7d' }
   );
 
-const buildAuthResponse = (user) => {
+const buildAuthResponse = async (user) => {
   const role = normalizeRole(user.role);
-  const profileId = resolveProfileId(user);
+  const profileId = await resolveProfileId(user);
 
   const payload = {
     email: user.email,
@@ -30,6 +36,73 @@ const buildAuthResponse = (user) => {
   }
 
   return payload;
+};
+
+const linkProfileOnRegister = async (user, role) => {
+  const email = user.email.toLowerCase();
+  const settings = await getSettings();
+
+  if (role === 'employee') {
+    let emp = await Employee.findOne({ email });
+    if (!emp) {
+      const count = await Employee.countDocuments();
+      const legacyId = `emp${String(count + 1).padStart(3, '0')}`;
+      emp = await Employee.create({
+        legacyId,
+        name: user.name,
+        email,
+        position: 'Staff',
+        department: 'General',
+        company: 'Our Company',
+        avatar: user.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2),
+        userId: user._id,
+      });
+      await LeaveBalance.create({
+        employeeId: getEmployeeLegacyId(emp),
+        annual: { total: settings.leaveAllocations?.annual || 15, used: 0 },
+        casual: { total: settings.leaveAllocations?.casual || 10, used: 0 },
+        personal: { total: settings.leaveAllocations?.personal || 10, used: 0 },
+      });
+    }
+    user.profileId = getEmployeeLegacyId(emp);
+    await user.save();
+    return user.profileId;
+  }
+
+  if (role === 'hr') {
+    let hr = await HRUser.findOne({ email });
+    if (!hr) {
+      const count = await HRUser.countDocuments();
+      hr = await HRUser.create({
+        legacyId: `hr${String(count + 1).padStart(3, '0')}`,
+        name: user.name,
+        email,
+        userId: user._id,
+      });
+    }
+    user.profileId = hr.legacyId || hr._id.toString();
+    await user.save();
+    return user.profileId;
+  }
+
+  if (role === 'company') {
+    let co = await Company.findOne({ email });
+    if (!co) {
+      const count = await Company.countDocuments();
+      co = await Company.create({
+        legacyId: `co${String(count + 1).padStart(3, '0')}`,
+        name: `${user.name} Company`,
+        email,
+        contact: user.name,
+        industry: 'General',
+      });
+    }
+    user.profileId = co.legacyId || co._id.toString();
+    await user.save();
+    return user.profileId;
+  }
+
+  return null;
 };
 
 /**
@@ -84,6 +157,8 @@ export const register = async (req, res) => {
       role: normalizedRole,
       profileId: profileId || null,
     });
+
+    await linkProfileOnRegister(user, normalizedRole);
 
     res.status(201).json({
       message: 'User registered successfully',
@@ -143,7 +218,7 @@ export const login = async (req, res) => {
       });
     }
 
-    res.json(buildAuthResponse(user));
+    res.json(await buildAuthResponse(user));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

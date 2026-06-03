@@ -11,7 +11,7 @@ const options = {
     info: {
       title: 'WorkForge API',
       version: '1.0.0',
-      description: 'WorkForge workforce management API — auth uses MongoDB; workforce data uses in-memory store (transitioning to MongoDB).',
+      description: 'WorkForge workforce management API — all data persisted in MongoDB Atlas.',
     },
     servers: [
       {

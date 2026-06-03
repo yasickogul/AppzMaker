@@ -8,6 +8,7 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "seed:admin": "node scripts/seedSuperAdmin.js",
+    "seed:db": "node scripts/seedDatabase.js",
     "hash:password": "node scripts/hashPassword.js"
   },
   "dependencies": {

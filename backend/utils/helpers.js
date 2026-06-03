@@ -96,12 +96,6 @@ export const computeMonthlyTrend = (attendanceRecords, employeeIds) => {
   });
 };
 
-export const syncCompanyEmployeeCounts = (hiringCompanies, employees) => {
-  hiringCompanies.forEach((company) => {
-    company.employeeCount = employees.filter((e) => e.companyId === company.id).length;
-  });
-};
-
 export const isEmployeeOnLeave = (employeeId, leaves, date = getTodayString()) =>
   leaves.some(
     (l) =>
